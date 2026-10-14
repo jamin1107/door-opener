@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#10203a">
+<title>开门助手</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: #f2f4f8; color: #1a1d21; min-height: 100vh;
+    display: flex; flex-direction: column;
+  }
+  header {
+    background: linear-gradient(135deg, #10203a, #1d3a6e);
+    color: #fff; padding: 26px 20px 22px;
+  }
+  header h1 { font-size: 20px; font-weight: 700; letter-spacing: 1px; }
+  header p { margin-top: 4px; font-size: 13px; color: #a9bcd8; }
+  .gear {
+    position: absolute; top: 24px; right: 16px; width: 34px; height: 34px;
+    border: none; border-radius: 50%; background: rgba(255,255,255,.14);
+    color: #fff; font-size: 16px; cursor: pointer;
+  }
+  main { flex: 1; padding: 18px 16px 90px; max-width: 640px; margin: 0 auto; width: 100%; }
+  .hint {
+    font-size: 13px; color: #5c6470; text-align: center;
+    padding: 18px 0; min-height: 52px;
+  }
+  .hint.err { color: #c0392b; }
+  #doors { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 380px) { #doors { grid-template-columns: 1fr; } }
+  .door {
+    border: 1px solid #e4e7ec; border-radius: 18px; background: #fff;
+    min-height: 108px; padding: 18px 16px; cursor: pointer;
+    display: flex; flex-direction: column; align-items: flex-start; justify-content: space-between;
+    box-shadow: 0 1px 3px rgba(16,32,58,.06);
+    transition: transform .12s ease, box-shadow .12s ease;
+  }
+  .door:active { transform: scale(.97); }
+  .door .dname { font-size: 16px; font-weight: 700; text-align: left; }
+  .door .dact {
+    margin-top: 12px; font-size: 12.5px; color: #2563eb;
+    background: #eff4ff; border-radius: 99px; padding: 4px 12px; font-weight: 600;
+  }
+  .door.busy { opacity: .75; }
+  .door.busy .dact { color: #5c6470; background: #eef0f4; }
+  .door.done { border-color: #b7e0c3; background: #f2fbf5; }
+  .door.done .dact { color: #16a34a; background: #e3f6e9; }
+  .toast {
+    position: fixed; left: 50%; bottom: 42px; transform: translateX(-50%) translateY(20px);
+    background: #1a1d21; color: #fff; font-size: 14px; padding: 11px 20px;
+    border-radius: 12px; opacity: 0; pointer-events: none;
+    transition: all .25s ease; max-width: 86vw; text-align: center; z-index: 50;
+  }
+  .toast.show { opacity: .96; transform: translateX(-50%) translateY(0); }
+  .toast.ok { background: #14532d; }
+  .toast.err { background: #7f1d1d; }
+  dialog {
+    border: none; border-radius: 16px; padding: 0; width: min(92vw, 400px);
+    box-shadow: 0 18px 50px rgba(0,0,0,.22);
+  }
+  dialog::backdrop { background: rgba(16,24,40,.45); }
+  .dlg-body { padding: 22px 20px; }
+  .dlg-body h2 { font-size: 17px; margin-bottom: 16px; }
+  .field { margin-bottom: 13px; }
+  .field label { display: block; font-size: 12.5px; color: #5c6470; margin-bottom: 5px; }
+  .field input {
+    width: 100%; padding: 11px 12px; font-size: 15px;
+    border: 1px solid #d5dae2; border-radius: 10px; outline: none; background: #fafbfc;
+  }
+  .field input:focus { border-color: #2563eb; background: #fff; }
+  .chk { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #5c6470; margin: 2px 0 16px; }
+  .btnrow { display: flex; gap: 10px; }
+  .btn {
+    flex: 1; padding: 12px 0; font-size: 15px; font-weight: 600;
+    border: none; border-radius: 10px; cursor: pointer;
+  }
+  .btn.primary { background: #2563eb; color: #fff; }
+  .btn.primary:disabled { background: #93b4f5; }
+  .btn.ghost { background: #eef0f4; color: #5c6470; }
+  .safe-note { margin-top: 14px; font-size: 11.5px; color: #98a1ad; line-height: 1.6; }
+  footer {
+    text-align: center; font-size: 11.5px; color: #98a1ad; padding: 0 0 26px;
+  }
+</style>
+</head>
+<body>
+
+<header style="position:relative">
+  <h1>开门助手</h1>
+  <p id="subtitle">加载中…</p>
+  <button class="gear" id="btnGear" title="设置">设置</button>
+</header>
+
+<main>
+  <div class="hint" id="hint"></div>
+  <div id="doors"></div>
+</main>
+
+<footer>接口来自 xm.wenwenmao.cn · 仅限本人账号使用</footer>
+
+<div class="toast" id="toast"></div>
+
+<dialog id="dlg">
+  <div class="dlg-body">
+    <h2>账号设置</h2>
+    <div class="field">
+      <label>手机号</label>
+      <input id="fPhone" type="tel" maxlength="11" placeholder="11 位手机号" autocomplete="off">
+    </div>
+    <div class="field">
+      <label>密码</label>
+      <input id="fPass" type="password" placeholder="小程序登录密码" autocomplete="off">
+    </div>
+    <div class="chk">
+      <input id="fRemember" type="checkbox" checked>
+      <label for="fRemember" style="margin:0">在本机记住密码（用于 token 过期后自动重新登录）</label>
+    </div>
+    <div class="btnrow">
+      <button class="btn ghost" id="btnClear">清除本地数据</button>
+      <button class="btn primary" id="btnSave">保存并进入</button>
+    </div>
+    <p class="safe-note">手机号与密码仅保存在本机浏览器 localStorage，不会上传到任何第三方；请勿在他人设备上勾选记住密码。</p>
+  </div>
+</dialog>
+
+<script>
+const API = 'https://xm.wenwenmao.cn';
+const DEFAULT_VILLAGE_ID = '1922895416559603713';
+const LS = { phone: 'dw_phone', pass: 'dw_pass', token: 'dw_token', village: 'dw_village' };
+
+const $ = s => document.querySelector(s);
+
+let toastTimer = null;
+function showToast(msg, ok) {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (ok === true ? ' ok' : ok === false ? ' err' : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
+}
+function setHint(msg, isErr) {
+  const h = $('#hint');
+  h.textContent = msg || '';
+  h.className = 'hint' + (isErr ? ' err' : '');
+}
+
+async function login() {
+  const phone = localStorage.getItem(LS.phone);
+  const pass = localStorage.getItem(LS.pass);
+  if (!phone || !pass) { openSettings(); return false; }
+  try {
+    const res = await fetch(API + '/api/app/user/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone, password: pass })
+    });
+    const data = await res.json().catch(() => ({ code: -1, msg: '响应解析失败' }));
+    if (data.code === 200 && data.token) {
+      localStorage.setItem(LS.token, data.token);
+      return true;
+    }
+    showToast(data.msg || '登录失败', false);
+  } catch (e) {
+    showToast('网络请求失败，请检查网络', false);
+  }
+  return false;
+}
+
+async function api(path, { method = 'GET', body = null, allowRetry = true } = {}) {
+  const headers = { 'Content-Type': 'application/json' };
+  const token = localStorage.getItem(LS.token);
+  if (token) headers.Authorization = token;
+  let res, data;
+  try {
+    res = await fetch(API + path, { method, headers, body: body ? JSON.stringify(body) : undefined });
+    data = await res.json();
+  } catch (e) {
+    throw new Error('网络请求失败');
+  }
+  if ((res.status === 401 || data.code === 401) && allowRetry) {
+    const ok = await login();
+    if (ok) return api(path, { method, body, allowRetry: false });
+    throw new Error('登录已失效');
+  }
+  return data;
+}
+
+function renderDoors(list) {
+  const grid = $('#doors');
+  grid.innerHTML = '';
+  (list || [])
+    .slice()
+    .sort((a, b) => (a.orderNum || 0) - (b.orderNum || 0))
+    .forEach(d => {
+      const btn = document.createElement('button');
+      btn.className = 'door';
+      const name = document.createElement('span');
+      name.className = 'dname';
+      name.textContent = d.doorName || d.doorId;
+      const act = document.createElement('span');
+      act.className = 'dact';
+      act.textContent = '轻点开门';
+      btn.append(name, act);
+      btn.addEventListener('click', () => openDoor(btn, d));
+      grid.appendChild(btn);
+    });
+  if (!grid.children.length) setHint('该小区暂无可开门禁', true);
+}
+
+async function openDoor(btn, d) {
+  const act = btn.querySelector('.dact');
+  btn.disabled = true;
+  btn.classList.remove('done');
+  btn.classList.add('busy');
+  act.textContent = '开门中…';
+  try {
+    const data = await api('/api/app/door/open/' + d.doorId, { allowRetry: true });
+    if (data && data.code === 200) {
+      btn.classList.add('done');
+      act.textContent = '已开门';
+      showToast(d.doorName + ' 已开门', true);
+      setTimeout(() => {
+        btn.classList.remove('done');
+        act.textContent = '轻点开门';
+      }, 2500);
+    } else {
+      act.textContent = '轻点开门';
+      showToast((data && data.msg) || '开门失败', false);
+    }
+  } catch (e) {
+    act.textContent = '轻点开门';
+    showToast(e.message || '开门失败', false);
+  }
+  btn.disabled = false;
+  btn.classList.remove('busy');
+}
+
+async function loadProfile() {
+  try {
+    const p = await api('/api/app/customer/profile', { allowRetry: false });
+    if (p && p.code === 200 && p.data && p.data.defaultHouse) {
+      const v = (p.data.defaultVillage || {}).villageName || '';
+      $('#subtitle').textContent = (v ? v + ' · ' : '') + p.data.defaultHouse.houseNameAll;
+      if (p.data.defaultVillage && p.data.defaultVillage.villageId) {
+        localStorage.setItem(LS.village, p.data.defaultVillage.villageId);
+      }
+    }
+  } catch (e) { /* 住户信息失败不影响开门 */ }
+}
+
+async function loadDoors() {
+  const vid = localStorage.getItem(LS.village) || DEFAULT_VILLAGE_ID;
+  const data = await api('/api/app/village/door/' + vid, { allowRetry: true });
+  if (data.code !== 200) throw new Error(data.msg || '获取门禁列表失败');
+  renderDoors(data.data);
+}
+
+async function init() {
+  if (!localStorage.getItem(LS.phone) || !localStorage.getItem(LS.pass)) {
+    $('#subtitle').textContent = '未配置账号';
+    setHint('请先在右上角「设置」里填写账号密码', true);
+    openSettings();
+    return;
+  }
+  setHint('正在加载门禁列表…');
+  $('#doors').innerHTML = '';
+  try {
+    await loadProfile();
+    await loadDoors();
+    setHint('');
+  } catch (e) {
+    setHint('加载失败：' + e.message, true);
+  }
+}
+
+function openSettings() {
+  $('#fPhone').value = localStorage.getItem(LS.phone) || '';
+  $('#fPass').value = localStorage.getItem(LS.pass) || '';
+  $('#dlg').showModal();
+}
+
+$('#btnGear').addEventListener('click', openSettings);
+
+$('#btnSave').addEventListener('click', async () => {
+  const phone = $('#fPhone').value.trim();
+  const pass = $('#fPass').value;
+  if (!/^1\d{10}$/.test(phone)) { showToast('请输入 11 位手机号', false); return; }
+  if (!pass) { showToast('请输入密码', false); return; }
+  localStorage.setItem(LS.phone, phone);
+  localStorage.setItem(LS.pass, pass);
+  localStorage.removeItem(LS.token);
+  $('#dlg').close();
+  const ok = await login();
+  if (ok) {
+    showToast('登录成功', true);
+    init();
+  }
+});
+
+$('#btnClear').addEventListener('click', () => {
+  Object.values(LS).forEach(k => localStorage.removeItem(k));
+  $('#dlg').close();
+  $('#subtitle').textContent = '未配置账号';
+  $('#doors').innerHTML = '';
+  setHint('本地数据已清除', false);
+});
+
+init();
+</script>
+</body>
+</html>
